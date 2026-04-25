@@ -5,6 +5,20 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$script:HasShouldProcess = $null -ne $PSCmdlet
+
+function Invoke-SafeShouldProcess {
+    param(
+        [string]$Target,
+        [string]$Action
+    )
+
+    if ($script:HasShouldProcess) {
+        return $PSCmdlet.ShouldProcess($Target, $Action)
+    }
+
+    return $true
+}
 
 function Get-BGInfoPath {
     $cmd = Get-Command bginfo.exe -ErrorAction SilentlyContinue
@@ -163,15 +177,15 @@ $shortcutPath = Join-Path $shortcutDir 'Run BGInfo.lnk'
 if ($Uninstall) {
     Write-Host 'Running uninstall mode...'
 
-    if ($PSCmdlet.ShouldProcess($taskName, 'Unregister scheduled task')) {
+    if (Invoke-SafeShouldProcess -Target $taskName -Action 'Unregister scheduled task') {
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
     }
 
-    if ($PSCmdlet.ShouldProcess($shortcutPath, 'Remove Start Menu shortcut')) {
+    if (Invoke-SafeShouldProcess -Target $shortcutPath -Action 'Remove Start Menu shortcut') {
         Remove-Item -Path $shortcutPath -Force -ErrorAction SilentlyContinue
     }
 
-    if ($PSCmdlet.ShouldProcess($shortcutDir, 'Remove empty BGInfo Start Menu folder')) {
+    if (Invoke-SafeShouldProcess -Target $shortcutDir -Action 'Remove empty BGInfo Start Menu folder') {
         if (Test-Path $shortcutDir) {
             $remaining = Get-ChildItem -Path $shortcutDir -Force -ErrorAction SilentlyContinue
             if (-not $remaining) {
@@ -180,7 +194,7 @@ if ($Uninstall) {
         }
     }
 
-    if ($RemoveInstallDir -and $PSCmdlet.ShouldProcess($installDir, 'Remove install directory')) {
+    if ($RemoveInstallDir -and (Invoke-SafeShouldProcess -Target $installDir -Action 'Remove install directory')) {
         Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -191,14 +205,14 @@ if ($Uninstall) {
 $projectRoot = Resolve-ProjectRoot
 
 Write-Host "Installing BGInfo assets to: $installDir"
-if ($PSCmdlet.ShouldProcess($installDir, 'Create install directory')) {
+if (Invoke-SafeShouldProcess -Target $installDir -Action 'Create install directory') {
     New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 }
 
 # Copy all VBS scripts used by BGInfo.
 Get-ChildItem -Path $projectRoot -Filter '*.vbs' | ForEach-Object {
     $destination = Join-Path $installDir $_.Name
-    if ($PSCmdlet.ShouldProcess($destination, "Copy $($_.Name)")) {
+    if (Invoke-SafeShouldProcess -Target $destination -Action "Copy $($_.Name)") {
         Copy-Item -Path $_.FullName -Destination $destination -Force
     }
 }
@@ -208,7 +222,7 @@ foreach ($extra in @('README.md', 'Validate-Scripts.ps1', 'steam_gear.jpg')) {
     $source = Join-Path $projectRoot $extra
     if (Test-Path $source) {
         $destination = Join-Path $installDir $extra
-        if ($PSCmdlet.ShouldProcess($destination, "Copy $extra")) {
+        if (Invoke-SafeShouldProcess -Target $destination -Action "Copy $extra") {
             Copy-Item -Path $source -Destination $destination -Force
         }
     }
@@ -217,7 +231,7 @@ foreach ($extra in @('README.md', 'Validate-Scripts.ps1', 'steam_gear.jpg')) {
 # Optional BGInfo layout file.
 $sourceConfig = Join-Path $projectRoot 'config.bgi'
 if (Test-Path $sourceConfig) {
-    if ($PSCmdlet.ShouldProcess($configPath, 'Copy config.bgi')) {
+    if (Invoke-SafeShouldProcess -Target $configPath -Action 'Copy config.bgi') {
         Copy-Item -Path $sourceConfig -Destination $configPath -Force
         Write-Host "Copied config.bgi"
     }
@@ -248,17 +262,17 @@ $action = New-ScheduledTaskAction -Execute $bginfoPath -Argument $bginfoArgs
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1)
 
-if ($PSCmdlet.ShouldProcess($taskName, 'Register scheduled task')) {
+if (Invoke-SafeShouldProcess -Target $taskName -Action 'Register scheduled task') {
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force | Out-Null
     Write-Host "Scheduled task '$taskName' is registered."
 }
 
 # Create Start Menu shortcut for manual execution.
-if ($PSCmdlet.ShouldProcess($shortcutDir, 'Create Start Menu folder')) {
+if (Invoke-SafeShouldProcess -Target $shortcutDir -Action 'Create Start Menu folder') {
     New-Item -ItemType Directory -Path $shortcutDir -Force | Out-Null
 }
 
-if ($PSCmdlet.ShouldProcess($shortcutPath, 'Create Start Menu shortcut')) {
+if (Invoke-SafeShouldProcess -Target $shortcutPath -Action 'Create Start Menu shortcut') {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($shortcutPath)
     $shortcut.TargetPath = $bginfoPath
