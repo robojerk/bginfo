@@ -102,7 +102,58 @@ function Test-InstallState {
     }
 }
 
-$projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+function Resolve-ProjectRoot {
+    $localRoot = $null
+
+    if ($PSScriptRoot) {
+        $localRoot = $PSScriptRoot
+    } elseif ($MyInvocation.MyCommand.Path) {
+        $localRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+
+    if ($localRoot -and (Test-Path $localRoot)) {
+        return $localRoot
+    }
+
+    $repoRawBase = 'https://raw.githubusercontent.com/robojerk/bginfo/main'
+    $stagingRoot = Join-Path $env:TEMP ('bginfo-install-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
+
+    Write-Host 'Running from memory. Downloading project files from GitHub...'
+
+    $requiredFiles = @(
+        'cpuname.vbs',
+        'gpu.vbs',
+        'igpu.vbs',
+        'hdinfo.vbs',
+        'ipaddr.vbs',
+        'mac.vbs',
+        'networkspeed.vbs',
+        'osversion.vbs',
+        'ram.vbs',
+        'sshstatus.vbs',
+        'Validate-Scripts.ps1',
+        'README.md',
+        'steam_gear.jpg'
+    )
+
+    foreach ($name in $requiredFiles) {
+        $url = "$repoRawBase/$name"
+        $destination = Join-Path $stagingRoot $name
+        Invoke-WebRequest -Uri $url -OutFile $destination
+    }
+
+    $configUrl = "$repoRawBase/config.bgi"
+    $configDestination = Join-Path $stagingRoot 'config.bgi'
+    try {
+        Invoke-WebRequest -Uri $configUrl -OutFile $configDestination -ErrorAction Stop
+    } catch {
+        # Optional file, ignore if not found.
+    }
+
+    return $stagingRoot
+}
+
 $installDir = Join-Path $env:USERPROFILE '.bginfo'
 $taskName = 'BGInfo'
 $configPath = Join-Path $installDir 'config.bgi'
@@ -136,6 +187,8 @@ if ($Uninstall) {
     Write-Host 'Uninstall complete.'
     return
 }
+
+$projectRoot = Resolve-ProjectRoot
 
 Write-Host "Installing BGInfo assets to: $installDir"
 if ($PSCmdlet.ShouldProcess($installDir, 'Create install directory')) {
