@@ -1,9 +1,7 @@
 '=============================================================================
 ' IP Address Info Script for BGInfo
 '=============================================================================
-' Description: Gets IP address based on configuration:
-' - If MAC file exists: shows IP for that adapter with connection type
-' - If no MAC file: shows IP from first active adapter with connection type
+' Description: Auto-detects IPv4 from first IP-enabled adapter
 ' Example: "192.168.1.100 (wired)" or "192.168.1.101 (wifi)"
 '=============================================================================
 
@@ -11,94 +9,63 @@ On Error Resume Next
 
 ' Connect to WMI
 Set wmi = GetObject("winmgmts:\\.\root\cimv2")
-Set fso = CreateObject("Scripting.FileSystemObject")
 
-' Try to read MAC address from file
-macAddress = ""
-If fso.FileExists("mac") Then
-    Set file = fso.OpenTextFile("mac", 1, False)
-    If Not file.AtEndOfStream Then
-        macAddress = Trim(file.ReadLine())
-    End If
-    file.Close
+If Err.Number <> 0 Then
+    Echo "N/A"
+    WScript.Quit 1
 End If
 
-' Build WMI query based on whether we have a MAC address
-If macAddress <> "" Then
-    ' Get IP and adapter info for specific MAC
-    query = "SELECT IPAddress, AdapterType, NetConnectionID FROM Win32_NetworkAdapter WHERE MACAddress='" & macAddress & "' AND NetEnabled=True"
-    Set adapters = wmi.ExecQuery(query)
-    
-    ' Get corresponding configuration for IP
-    For Each adapter In adapters
-        query = "SELECT IPAddress FROM Win32_NetworkAdapterConfiguration WHERE MACAddress='" & macAddress & "'"
-        Set configs = wmi.ExecQuery(query)
-        
-        For Each config In configs
-            If Not IsNull(config.IPAddress) Then
-                ' Determine connection type
-                connType = "(wired)"  ' Default to wired
-                If Not IsNull(adapter.AdapterType) Then
-                    ' Debug connection info
-                    'Echo "Type: " & adapter.AdapterType & " | Name: " & adapter.NetConnectionID
-                    
-                    ' Check for wireless adapter
-                    If adapter.AdapterType = "Ethernet 802.3" Then
-                        connType = "(wired)"
-                    ElseIf adapter.AdapterType = "IEEE 802.11" Then
-                        connType = "(wifi)"
-                    End If
-                End If
-                
-                ' Output IP with connection type
-                For Each ip In config.IPAddress
-                    If InStr(ip, ":") = 0 Then
-                        Echo ip & " " & connType
-                        Exit For
-                    End If
-                Next
+query = "SELECT MACAddress, IPAddress, Index FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled=True"
+Set configs = wmi.ExecQuery(query)
+result = ""
+
+For Each config In configs
+    If Not IsNull(config.IPAddress) Then
+        ipv4 = ""
+        For Each ip In config.IPAddress
+            If InStr(ip, ":") = 0 Then
+                ipv4 = ip
+                Exit For
             End If
         Next
-    Next
-Else
-    ' Get IP from any active adapter
-    query = "SELECT IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled=True"
-    Set configs = wmi.ExecQuery(query)
-    
-    For Each config In configs
-        If Not IsNull(config.IPAddress) Then
-            ' Get adapter info for connection type
-            query = "SELECT AdapterType, NetConnectionID FROM Win32_NetworkAdapter WHERE NetEnabled=True AND MACAddress='" & config.MACAddress & "'"
-            Set adapters = wmi.ExecQuery(query)
-            
+
+        If ipv4 <> "" Then
+            connType = "(wired)"
+            adapterQuery = "SELECT AdapterType, Name, NetConnectionID FROM Win32_NetworkAdapter WHERE Index=" & config.Index
+            Set adapters = wmi.ExecQuery(adapterQuery)
+
             For Each adapter In adapters
-                ' Determine connection type
-                connType = "(wired)"  ' Default to wired
-                If Not IsNull(adapter.AdapterType) Then
-                    ' Debug connection info
-                    'Echo "Type: " & adapter.AdapterType & " | Name: " & adapter.NetConnectionID
-                    
-                    ' Check for wireless adapter
-                    If adapter.AdapterType = "Ethernet 802.3" Then
-                        connType = "(wired)"
-                    ElseIf adapter.AdapterType = "IEEE 802.11" Then
-                        connType = "(wifi)"
-                    End If
+                aType = ""
+                aName = ""
+                aConn = ""
+
+                If Not IsNull(adapter.AdapterType) Then aType = adapter.AdapterType
+                If Not IsNull(adapter.Name) Then aName = adapter.Name
+                If Not IsNull(adapter.NetConnectionID) Then aConn = adapter.NetConnectionID
+
+                If InStr(1, aType, "802.11", 1) > 0 Or _
+                   InStr(1, aName, "Wi-Fi", 1) > 0 Or _
+                   InStr(1, aName, "Wireless", 1) > 0 Or _
+                   InStr(1, aConn, "Wi-Fi", 1) > 0 Or _
+                   InStr(1, aConn, "Wireless", 1) > 0 Or _
+                   InStr(1, aConn, "WLAN", 1) > 0 Then
+                    connType = "(wifi)"
                 End If
-                
-                ' Output IP with connection type
-                For Each ip In config.IPAddress
-                    If InStr(ip, ":") = 0 Then
-                        Echo ip & " " & connType
-                        Exit For
-                    End If
-                Next
+
+                Exit For
             Next
+
+            result = ipv4 & " " & connType
             Exit For
         End If
-    Next
+    End If
+Next
+
+If result = "" Then
+    Echo "N/A"
+Else
+    Echo result
 End If
 
 ' Clean up
 Set wmi = Nothing
-Set fso = Nothing

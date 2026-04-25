@@ -10,36 +10,57 @@ REMOVE_MICROSOFT = True  ' Set to False to keep "Microsoft" in the name
 
 On Error Resume Next
 
-' Connect to registry and create shell
+' Connect to registry and WMI
 Set shell = CreateObject("WScript.Shell")
+Set wmi = GetObject("winmgmts:\\.\root\cimv2")
 regPath = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\"
 
-' Get OS Caption from WMIC
-Set wmicExec = shell.Exec("wmic os get Caption /value")
-osCaption = wmicExec.StdOut.ReadAll()
+If Err.Number <> 0 Then
+    Echo "N/A"
+    WScript.Quit 1
+End If
 
-' Clean up the caption text
-osCaption = Replace(osCaption, "Caption=", "")
-osCaption = Replace(osCaption, vbCr, "")
-osCaption = Replace(osCaption, vbLf, "")
-osCaption = Replace(osCaption, vbTab, "")
-osCaption = Trim(osCaption)
+' Get OS caption from WMI (wmic.exe-free)
+osCaption = ""
+Set osItems = wmi.ExecQuery("SELECT Caption FROM Win32_OperatingSystem")
+For Each osItem In osItems
+    If Not IsNull(osItem.Caption) Then
+        osCaption = Trim(osItem.Caption)
+        Exit For
+    End If
+Next
 
 ' Remove "Microsoft" if configured
-If REMOVE_MICROSOFT Then
+If REMOVE_MICROSOFT And osCaption <> "" Then
     osCaption = Replace(osCaption, "Microsoft ", "")
 End If
 
-' Get Display Version from registry and clean it
-displayVersion = Trim(shell.RegRead(regPath & "DisplayVersion"))
+' Get DisplayVersion, then fallback to ReleaseId for older versions
+displayVersion = ""
+displayVersion = Trim(CStr(shell.RegRead(regPath & "DisplayVersion")))
+If Err.Number <> 0 Then
+    Err.Clear
+    displayVersion = Trim(CStr(shell.RegRead(regPath & "ReleaseId")))
+    If Err.Number <> 0 Then
+        Err.Clear
+        displayVersion = ""
+    End If
+End If
 
 ' Output the formatted version (single space between parts)
-If displayVersion <> "" Then
+If osCaption = "" And displayVersion = "" Then
+    Echo "N/A"
+ElseIf displayVersion <> "" And osCaption <> "" Then
     Echo osCaption & " " & displayVersion
 Else
-    Echo osCaption
+    If osCaption <> "" Then
+        Echo osCaption
+    Else
+        Echo displayVersion
+    End If
 End If
 
 ' Clean up
 Set shell = Nothing
-Set wmicExec = Nothing
+Set wmi = Nothing
+Set osItems = Nothing

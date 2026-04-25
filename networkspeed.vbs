@@ -1,60 +1,69 @@
 '=============================================================================
 ' Network Speed Info Script for BGInfo
 '=============================================================================
-' Description: Shows network adapter speed(s):
-' - If MAC file exists: shows speed for that specific adapter
-' - If no MAC file or empty: shows speeds for all active adapters
+' Description: Shows speed for first active adapter with IPv4
 '=============================================================================
 
 On Error Resume Next
 
-' Connect to WMI and FSO
+' Connect to WMI
 Set wmi = GetObject("winmgmts:\\.\root\cimv2")
-Set fso = CreateObject("Scripting.FileSystemObject")
 
-' Try to read MAC address from file
-macAddress = ""
-If fso.FileExists("mac") Then
-    Set file = fso.OpenTextFile("mac", 1, False)
-    If Not file.AtEndOfStream Then
-        macAddress = Trim(file.ReadLine())
-    End If
-    file.Close
+If Err.Number <> 0 Then
+    Echo "N/A"
+    WScript.Quit 1
 End If
 
-' Build WMI query based on whether we have a MAC address
-If macAddress <> "" Then
-    ' Get speed for specific MAC
-    query = "SELECT Speed FROM Win32_NetworkAdapter WHERE MACAddress='" & macAddress & "' AND NetEnabled=True"
-Else
-    ' Get speed from all active adapters
-    query = "SELECT Speed FROM Win32_NetworkAdapter WHERE NetEnabled=True"
-End If
+selectedMac = ""
+Set configs = wmi.ExecQuery("SELECT MACAddress, IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled=True")
+For Each config In configs
+    If Not IsNull(config.MACAddress) And Not IsNull(config.IPAddress) Then
+        hasIPv4 = False
+        For Each ip In config.IPAddress
+            If InStr(ip, ":") = 0 Then
+                hasIPv4 = True
+                Exit For
+            End If
+        Next
 
-' Execute query
-Set adapters = wmi.ExecQuery(query)
-
-' Format and output speeds
-For Each adapter In adapters
-    If Not IsNull(adapter.Speed) Then
-        speed = CLng(adapter.Speed)
-        
-        ' Convert to appropriate units
-        If speed >= 1000000000 Then
-            ' Convert to Gb/s
-            speedText = Round(speed/1000000000, 1) & " Gb/s"
-        ElseIf speed >= 1000000 Then
-            ' Convert to Mb/s
-            speedText = Round(speed/1000000, 0) & " Mb/s"
-        Else
-            ' Show in Kb/s
-            speedText = Round(speed/1000, 0) & " Kb/s"
+        If hasIPv4 Then
+            selectedMac = config.MACAddress
+            Exit For
         End If
-        
-        Echo speedText
     End If
 Next
 
+If selectedMac = "" Then
+    Echo "N/A"
+    Set wmi = Nothing
+    WScript.Quit 0
+End If
+
+query = "SELECT Speed FROM Win32_NetworkAdapter WHERE MACAddress='" & selectedMac & "' AND NetEnabled=True"
+Set adapters = wmi.ExecQuery(query)
+speedText = ""
+
+For Each adapter In adapters
+    If Not IsNull(adapter.Speed) Then
+        speed = CDbl(adapter.Speed)
+
+        If speed >= 1000000000 Then
+            speedText = Round(speed/1000000000, 1) & " Gb/s"
+        ElseIf speed >= 1000000 Then
+            speedText = Round(speed/1000000, 0) & " Mb/s"
+        Else
+            speedText = Round(speed/1000, 0) & " Kb/s"
+        End If
+
+        Exit For
+    End If
+Next
+
+If speedText = "" Then
+    Echo "N/A"
+Else
+    Echo speedText
+End If
+
 ' Clean up
 Set wmi = Nothing
-Set fso = Nothing

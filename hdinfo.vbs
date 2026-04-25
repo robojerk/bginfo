@@ -3,11 +3,11 @@
 '=============================================================================
 ' Description: Shows fixed drive letters with free and total space
 ' Output Styles:
-'   1 = Percentage (C:\ 74.7GB/118GB (63% free))
-'   2 = Bar       (C:\ [¦¦¦¦¦¦¦¦¦¦] 74.7GB free)
+'   1 = Percentage (C:\ 74.7 GB / 118 GB (63% free))
+'   2 = Bar       (C:\ [||||||||||] 74.7 GB free)
 '   3 = Compact   (C:\ 74.7/118 GB)
-'   4 = Detailed  (C:\ Free: 74.7GB | Total: 118GB | Used: 43.3GB)
-'   5 = Simple    (C:\ 74.7 of 118GB)
+'   4 = Detailed  (C:\ Free: 74.7 GB | Total: 118 GB | Used: 43.3 GB)
+'   5 = Simple    (C:\ 74.7 GB of 118 GB)
 '   6 = Minimal   (C:\ 74.7/118)
 '=============================================================================
 
@@ -21,9 +21,14 @@ On Error Resume Next
 
 ' Connect to WMI
 Set wmi = GetObject("winmgmts:\\.\root\cimv2")
+If Err.Number <> 0 Then
+    Echo "N/A"
+    WScript.Quit 1
+End If
 
 ' Get fixed drives only (Type 3)
 Set drives = wmi.ExecQuery("SELECT DeviceID, FreeSpace, Size FROM Win32_LogicalDisk WHERE DriveType=3")
+hasOutput = False
 
 ' Format and output drive info
 For Each drive In drives
@@ -37,30 +42,35 @@ For Each drive In drives
         ' Format output based on style
         Select Case OUTPUT_STYLE
             Case 1  ' Percentage
-                Echo drive.DeviceID & "\ " & freeGB & "GB/" & totalGB & "GB (" & percentFree & "% free)"
+                Echo drive.DeviceID & "\ " & freeGB & " GB / " & totalGB & " GB (" & percentFree & "% free)"
                 
             Case 2  ' Bar (10 segments)
                 barCount = Round(percentFree/10, 0)
-                bar = String(barCount, "¦") & String(10-barCount, "¦")
-                Echo drive.DeviceID & "\ [" & bar & "] " & freeGB & "GB free"
+                bar = String(barCount, "|") & String(10-barCount, "|")
+                Echo drive.DeviceID & "\ [" & bar & "] " & freeGB & " GB free"
                 
             Case 3  ' Compact
                 Echo drive.DeviceID & "\ " & freeGB & "/" & totalGB & " GB"
                 
             Case 4  ' Detailed
-                Echo drive.DeviceID & "\ Free: " & freeGB & "GB | Total: " & totalGB & "GB | Used: " & usedGB & "GB"
+                Echo drive.DeviceID & "\ Free: " & freeGB & " GB | Total: " & totalGB & " GB | Used: " & usedGB & " GB"
                 
             Case 5  ' Simple
-                Echo drive.DeviceID & "\ " & freeGB & " of " & totalGB & "GB"
+                Echo drive.DeviceID & "\ " & freeGB & " GB of " & totalGB & " GB"
                 
             Case 6  ' Minimal
                 Echo drive.DeviceID & "\ " & freeGB & "/" & totalGB
                 
             Case Else  ' Default to Simple if invalid style
-                Echo drive.DeviceID & "\ " & freeGB & " of " & totalGB & "GB"
+                Echo drive.DeviceID & "\ " & freeGB & " GB of " & totalGB & " GB"
         End Select
+        hasOutput = True
     End If
 Next
+
+If Not hasOutput Then
+    Echo "N/A"
+End If
 
 ' Clean up
 Set wmi = Nothing

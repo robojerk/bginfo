@@ -9,23 +9,27 @@ On Error Resume Next
 
 ' Connect to WMI
 Set wmi = GetObject("winmgmts:\\.\root\cimv2")
+If Err.Number <> 0 Then
+    Echo "N/A"
+    WScript.Quit 1
+End If
 
 ' Check for SSH Server service
 Set services = wmi.ExecQuery("SELECT State FROM Win32_Service WHERE Name='sshd'")
+result = "Not Installed"
 
 ' Determine SSH status
 If services.Count > 0 Then
     For Each service In services
         If service.State = "Running" Then
-            Echo "Running"
+            result = "Running"
         Else
-            Echo "Stopped"
+            result = "Stopped"
         End If
         Exit For
     Next
-Else
-    Echo "Not Installed"
 End If
+Echo result
 
 ' Clean up
 Set wmi = Nothing
