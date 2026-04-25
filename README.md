@@ -42,13 +42,17 @@ These scripts return one line of output each so BGInfo can display system and ne
 
 Quick install from GitHub:
 
-- `irm "https://raw.githubusercontent.com/robojerk/bginfo/main/install.ps1" | iex`
+```powershell
+irm "https://raw.githubusercontent.com/robojerk/bginfo/main/install.ps1" | iex
+```
 
 Safer install flow (review script before execution):
 
-- `$script = irm "https://raw.githubusercontent.com/robojerk/bginfo/main/install.ps1"`
-- `$script`
-- `iex $script`
+```powershell
+$script = irm "https://raw.githubusercontent.com/robojerk/bginfo/main/install.ps1"
+$script
+iex $script
+```
 
 What `install.ps1` does:
 
@@ -63,10 +67,19 @@ What `install.ps1` does:
 
 Useful install modes:
 
-- Preview changes: `.\install.ps1 -WhatIf`
-- Prompt for each change: `.\install.ps1 -Confirm`
-- Uninstall task + shortcut: `.\install.ps1 -Uninstall`
-- Uninstall and remove `~/.bginfo`: `.\install.ps1 -Uninstall -RemoveInstallDir`
+```powershell
+# Preview changes
+.\install.ps1 -WhatIf
+
+# Prompt for each change
+.\install.ps1 -Confirm
+
+# Uninstall task + shortcut
+.\install.ps1 -Uninstall
+
+# Uninstall and remove ~/.bginfo
+.\install.ps1 -Uninstall -RemoveInstallDir
+```
 
 ## Optional Autostart Task
 
@@ -79,7 +92,9 @@ Before running it, verify paths in the script match your machine:
 
 Run in PowerShell:
 
-- `powershell -ExecutionPolicy Bypass -File .\Enable-BGInfoAutostart.ps1`
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Enable-BGInfoAutostart.ps1
+```
 
 ## Notes
 
@@ -95,4 +110,6 @@ Run in PowerShell:
 
 Run all VBScript fields once with:
 
-- `powershell -ExecutionPolicy Bypass -File .\Validate-Scripts.ps1`
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Validate-Scripts.ps1
+```
